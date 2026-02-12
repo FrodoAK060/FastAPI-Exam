@@ -67,26 +67,25 @@ async def delete_review(review_id: int,
     """
     Удалить отзыв (пометить его как неактивный).
     """
+    review = (await db.scalar(select(ReviewModel).where(ReviewModel.id == review_id, ReviewModel.is_active == True)))
+    if review is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
+    
     if current_user.role not in ('buyer', 'admin'):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only buyers or admin can perform this action")
     
-    # я сделал уже в других эндпоинтах автоудаление отзывов при удалении товаров и пользователей, но на всякий случай проверяю
-    user_id = (await db.scalar(select(ReviewModel.user_id).where(ReviewModel.id == review_id, ReviewModel.is_active == True)))
-    product_id = (await db.scalar(select(ReviewModel.product_id).where(ReviewModel.id == review_id, ReviewModel.is_active == True)))
-    if None in (user_id, product_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
-    
-    if current_user.role == 'buyer' and current_user.id != user_id:
+    if current_user.role == 'buyer' and current_user.id != review.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Buyers can only delete their own reviews")
 
     stmt = update(ReviewModel).where(ReviewModel.id == review_id).values(is_active=False)
     await db.execute(stmt)
     await db.commit()
+    
 
     # Обновляем рейтинг товара
-    stmt1 = select(func.avg(ReviewModel.grade)).where(ReviewModel.product_id == product_id, ReviewModel.is_active == True)
+    stmt1 = select(func.avg(ReviewModel.grade)).where(ReviewModel.product_id == review.product_id, ReviewModel.is_active == True)
     avg_rating = (await db.scalar(stmt1)) or 0.0
-    stmt2 = update(ProductModel).where(ProductModel.id == product_id).values(rating=avg_rating)  
+    stmt2 = update(ProductModel).where(ProductModel.id == review.product_id).values(rating=avg_rating)  
     await db.execute(stmt2)
     await db.commit()
 
