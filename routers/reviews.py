@@ -59,11 +59,11 @@ async def create_review(review: ReviewCreate,
     return new_review
 
 
-@router.delete('/{review_id}', status_code=status.HTTP_200_OK)
+@router.delete('/{review_id}', response_model=ReviewSchema, status_code=status.HTTP_200_OK)
 async def delete_review(review_id: int, 
                         current_user: UserModel = Depends(get_current_user), 
                         db: AsyncSession = Depends(get_async_db)
-) -> dict:
+):
     """
     Удалить отзыв (пометить его как неактивный).
     """
@@ -80,7 +80,7 @@ async def delete_review(review_id: int,
     stmt = update(ReviewModel).where(ReviewModel.id == review_id).values(is_active=False)
     await db.execute(stmt)
     await db.commit()
-    
+
 
     # Обновляем рейтинг товара
     stmt1 = select(func.avg(ReviewModel.grade)).where(ReviewModel.product_id == review.product_id, ReviewModel.is_active == True)
@@ -89,4 +89,4 @@ async def delete_review(review_id: int,
     await db.execute(stmt2)
     await db.commit()
 
-    return {"message": "Review deleted"} 
+    return review

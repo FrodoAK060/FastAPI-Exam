@@ -142,7 +142,7 @@ async def refresh_token(
     }
 
 
-@router.post("/accsess-token")
+@router.post("/access-token")
 async def get_new_access_token(
     body: RefreshTokenRequest,
     db: AsyncSession = Depends(get_async_db),
@@ -170,21 +170,21 @@ async def get_new_access_token(
         raise HTTPException(status_code=401, detail="Invalid refresh token")
     
 
-@router.delete("/{user_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{user_id}", response_model=UserSchema, status_code=status.HTTP_200_OK)
 async def delete_user(user_id: int, 
                       current_user = Depends(get_current_user), 
                       db: AsyncSession = Depends(get_async_db)
-) -> dict:
+):
     """
     Удаляет пользователя (помечает его как неактивного).
     """
-    if current_user.role != "admin" and current_user.id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-
     result = await db.scalars(select(UserModel).where(UserModel.id == user_id))
     user = result.first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    if current_user.id != user_id and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
     await db.execute(update(UserModel).where(UserModel.id == user_id).values(is_active=False))
 
@@ -197,5 +197,4 @@ async def delete_user(user_id: int,
         await db.execute(update(CategoryModel).where(CategoryModel.admin_id == user_id).values(is_active=False))
     
     await db.commit()
-    await db.refresh(user)
     return user    
